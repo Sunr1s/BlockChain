@@ -1,0 +1,7 @@
+https://www.gsd.inesc-id.pt/~ler/docencia/rcs1314/papers/P2P2013_041.pdf
+https://medium.com/safenetwork/evolving-terminology-with-evolved-technology-decentralized-versus-distributed-7f8b4c9eacb
+https://www.youtube.com/playlist?list=PL4_hYwCyhAvZmzpIjwewZOdBMFJooHIHx
+https://github.com/golang-standards/project-layout
+https://github.com/cedricwalter/blockchain-consensus
+https://github.com/bitcoinbook/bitcoinbook
+https://github.com/superstas/gcoin/blob/master/gcoin/mempool/mempool.go
