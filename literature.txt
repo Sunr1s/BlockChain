@@ -5,3 +5,6 @@ https://github.com/golang-standards/project-layout
 https://github.com/cedricwalter/blockchain-consensus
 https://github.com/bitcoinbook/bitcoinbook
 https://github.com/superstas/gcoin/blob/master/gcoin/mempool/mempool.go
+https://pdfs.semanticscholar.org/7dce/801b2b13001d0d3b0319c550ee1977e456df.pdf
+https://arxiv.org/pdf/1801.07447.pdf
+https://openaccess.uoc.edu/bitstream/10609/45861/6/mberiniTFM1215memoria.pdf

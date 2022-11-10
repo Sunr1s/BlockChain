@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	bc "./blockchain"
 	nt "./network"
@@ -119,9 +120,49 @@ func init() {
 
 func main() {
 	nt.Listen(Serve, handleServer)
+	go runMining()
 	for {
 		fmt.Scanln()
 	}
+}
+
+func runMining() string {
+	for range time.Tick(time.Second) {
+		if Mempool.Size() == bc.TXS_LIMIT || Mempool.Size() > bc.TXS_LIMIT {
+			for _, txs := range Mempool.Get(bc.TXS_LIMIT - len(Block.Transactions)) {
+				// txs.CurrHash =
+				txs.PrevBlock = Chain.LastHash()
+				err := Block.AddTransaction(Chain, &txs)
+				if err != nil {
+					fmt.Println(err.Error())
+				}
+				if len(Block.Transactions) == bc.TXS_LIMIT {
+					break
+				}
+			}
+		}
+		if len(Block.Transactions) == bc.TXS_LIMIT {
+			Mutex.Lock()
+			block := *Block
+			IsMining = true
+			Mutex.Unlock()
+			res := (&block).Accept(Chain, User)
+			ProbablyLhash = (&block).CurrHash
+			(&block).Mining(BreakMining)
+			Mutex.Lock()
+			IsMining = false
+			if res == nil && bytes.Equal(block.PrevHash, Block.PrevHash) {
+				Chain.AddBlock(&block)
+				pushBlockToNet(&block)
+				fmt.Println("Hash good")
+			} else {
+				fmt.Println("Hash err")
+			}
+			Block = bc.NewBlock(User.Address(), Chain.LastHash())
+			Mutex.Unlock()
+		}
+	}
+	return "ok"
 }
 
 func handleServer(conn nt.Conn, pack *nt.Package) {
@@ -142,39 +183,6 @@ func addTransaction(pack *nt.Package) string {
 		fmt.Println(Mempool.Size())
 	}
 
-	if Mempool.Size() == bc.TXS_LIMIT || Mempool.Size() > bc.TXS_LIMIT {
-		for _, txs := range Mempool.Get(bc.TXS_LIMIT - len(Block.Transactions)) {
-			// txs.CurrHash =
-			txs.PrevBlock = Chain.LastHash()
-			err := Block.AddTransaction(Chain, &txs)
-			if err != nil {
-				fmt.Println(err.Error())
-				return "fail 2 mempool"
-			}
-			if len(Block.Transactions) == bc.TXS_LIMIT {
-				break
-			}
-		}
-	}
-	if len(Block.Transactions) == bc.TXS_LIMIT {
-		go func() {
-			Mutex.Lock()
-			block := *Block
-			IsMining = true
-			Mutex.Unlock()
-			res := (&block).Accept(Chain, User)
-			ProbablyLhash = (&block).CurrHash
-			(&block).Mining(BreakMining)
-			Mutex.Lock()
-			IsMining = false
-			if res == nil && bytes.Equal(block.PrevHash, Block.PrevHash) {
-				Chain.AddBlock(&block)
-				pushBlockToNet(&block)
-			}
-			Block = bc.NewBlock(User.Address(), Chain.LastHash())
-			Mutex.Unlock()
-		}()
-	}
 	return "ok"
 }
 
