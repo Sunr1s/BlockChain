@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	nt "./network"
+	nt "github.com/Sunr1s/chain/network"
 )
 
 const (

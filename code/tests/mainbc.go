@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	bc "./blockchain"
+	bc "github.com/Sunr1s/chain/blockchain"
 )
 
 const (

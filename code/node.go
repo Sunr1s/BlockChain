@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	bc "./blockchain"
-	nt "./network"
+	bc "github.com/Sunr1s/chain/blockchain"
+	nt "github.com/Sunr1s/chain/network"
 
 	_ "github.com/mattn/go-sqlite3"
 )

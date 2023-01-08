@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	bc "./blockchain"
+	bc "github.com/Sunr1s/chain/blockchain"
 )
 
 type Wallet struct {

@@ -22,12 +22,12 @@ CREATE TABLE BlockChain (
 
 var (
 	hashTime   time.Time
-	DIFFICULTY uint8 = 24
+	DIFFICULTY uint8 = 20
 )
 
 const (
 	KEY_SIZE      = 512
-	DEBUG         = false
+	DEBUG         = true
 	TXS_LIMIT     = 2
 	RAND_BYTES    = 32
 	START_PRECENT = 10

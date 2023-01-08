@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	bc "./blockchain"
-	nt "./network"
+	bc "github.com/Sunr1s/chain/blockchain"
+	nt "github.com/Sunr1s/chain/network"
 )
 
 func init() {
@@ -66,13 +66,12 @@ func main() {
 }
 
 func handleClient() {
-	chainTX([]string{"tx", "aaa", "5"})
-	chainTX([]string{"tx", "aaa", "5"})
 
 	var (
 		message string
 		splited []string
 	)
+	userBalance()
 	for {
 		message = inputString("> ")
 		splited = strings.Split(message, " ")

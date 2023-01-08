@@ -12,10 +12,8 @@
             "mode": "auto",
             "program": "${fileDirname}",
             "args": [
-                "-serve::8080",
-                "-newuser:node1",
-                "-newchain:chain1.db",
-                "-loadaddr:addr.json"
+                "-loaduser:node1.key",
+                "-loadaddr:addr.json",
             ]
         }
     ]
