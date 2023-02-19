@@ -1,7 +1,7 @@
 # University Scientific Work: Prototype Blockchain Node
 ## Introduction
 
-This project aims to develop a prototype blockchain node for a decentralized financial system. The prototype will demonstrate the basic functionality of a blockchain node, such as validating transactions, creating blocks and maintaining the ledger. The prototype will be a proof-of-concept for a decentralized financial system and will help to identify potential problems and limitations of such a system.
+This project aims to develop a prototype blockchain node for a decentralized financial system. The prototype will demonstrate the basic functionality of a blockchain node, such as validating transactions, creating blocks and maintaining the ledger. The prototype will be a proof-of-work for a decentralized financial system and will help to identify potential problems and limitations of such a system.
 ## Decentralized Finance Problems
 
 Decentralized finance (DeFi) is a rapidly growing area in the blockchain industry, but there are several challenges that need to be addressed in order to make DeFi a viable alternative to traditional financial systems. Some of these challenges include:
