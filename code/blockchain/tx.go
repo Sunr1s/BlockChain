@@ -4,41 +4,36 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
 )
 
-func NewTransaction(user *User, lastHash []byte, to string, value uint64) *Transaction {
+func NewTransaction(user *User, lastHash []byte, to string, value uint64) (*Transaction, error) {
+	if user == nil {
+		return nil, fmt.Errorf("invalid user")
+	}
+
 	tx := &Transaction{
 		RandBytes: GenerateRandomBytes(RAND_BYTES),
 		PrevBlock: lastHash,
 		Sender:    user.Address(),
-		Reciver:   to,
+		Receiver:  to,
 		Value:     value,
 	}
-	if value > START_PRECENT {
-		tx.ToStorage = STORAGE_REWRD
+	if value > START_PERCENT {
+		tx.ToStorage = STORAGE_REWARD
 	}
-	tx.CurrHash = tx.hash()
-	tx.Signature = tx.sign(user.Private())
-	return tx
+	tx.CurrHash = tx.Hash()
+	tx.Signature = tx.Sign(user.Private())
+	return tx, nil
 }
 
-func (tx *Transaction) hashIsValid() bool {
-	// fmt.Println(tx.hash())
-	// fmt.Println(tx.CurrHash)
-	return bytes.Equal(tx.hash(), tx.CurrHash)
-}
-
-func (tx *Transaction) signIsValid() bool {
-	return Verify(ParsePublic(tx.Sender), tx.CurrHash, tx.Signature) == nil
-}
-
-func (tx *Transaction) hash() []byte {
+func (tx *Transaction) Hash() []byte {
 	return HashSum(bytes.Join(
 		[][]byte{
 			tx.RandBytes,
 			tx.PrevBlock,
 			[]byte(tx.Sender),
-			[]byte(tx.Reciver),
+			[]byte(tx.Receiver),
 			ToBytes(tx.Value),
 			ToBytes(tx.ToStorage),
 		},
@@ -46,23 +41,47 @@ func (tx *Transaction) hash() []byte {
 	))
 }
 
-func (tx *Transaction) sign(priv *rsa.PrivateKey) []byte {
-	return Sign(priv, tx.CurrHash)
-}
-
-func SerializeTx(tx *Transaction) string {
-	jsonData, err := json.MarshalIndent(*tx, "", "\t")
-	if err != nil {
-		return ""
+func (tx *Transaction) Sign(priv *rsa.PrivateKey) []byte {
+	if priv == nil {
+		return nil
 	}
-	return string(jsonData)
-}
-
-func DeserializeTx(data string) *Transaction {
-	var tx Transaction
-	err := json.Unmarshal([]byte(data), &tx)
+	sign, err := Sign(priv, tx.CurrHash)
 	if err != nil {
 		return nil
 	}
-	return &tx
+	return sign
+}
+
+func (tx *Transaction) IsValid() bool {
+	if !bytes.Equal(tx.Hash(), tx.CurrHash) {
+		return false
+	}
+
+	pubkey, err := ParsePublic(tx.Sender)
+	if err != nil {
+		return false
+	}
+
+	if err := Verify(pubkey, tx.CurrHash, tx.Signature); err != nil {
+		return false
+	}
+
+	return true
+}
+
+func SerializeTx(tx *Transaction) (string, error) {
+	data, err := json.MarshalIndent(*tx, "", "\t")
+	if err != nil {
+		return "", fmt.Errorf("serialization failed: %w", err)
+	}
+	return string(data), nil
+}
+
+func DeserializeTx(data string) (*Transaction, error) {
+	var tx Transaction
+	err := json.Unmarshal([]byte(data), &tx)
+	if err != nil {
+		return nil, fmt.Errorf("deserialization failed: %w", err)
+	}
+	return &tx, nil
 }

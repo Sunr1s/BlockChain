@@ -2,10 +2,11 @@ package blockchain
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"time"
 
-	mrand "math/rand"
+	"math/rand"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -22,16 +23,16 @@ CREATE TABLE BlockChain (
 
 var (
 	hashTime   time.Time
-	DIFFICULTY uint8 = 20
+	DIFFICULTY uint8 = 21
 )
 
 const (
-	KEY_SIZE      = 512
-	DEBUG         = true
-	TXS_LIMIT     = 2
-	RAND_BYTES    = 32
-	START_PRECENT = 10
-	STORAGE_REWRD = 1
+	KEY_SIZE       = 512
+	DEBUG          = true
+	TXS_LIMIT      = 2
+	RAND_BYTES     = 32
+	START_PERCENT  = 10
+	STORAGE_REWARD = 1
 )
 
 const (
@@ -42,34 +43,40 @@ const (
 )
 
 func init() {
-	mrand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano())
 }
 
-func NewChain(filename, reciver string) error {
-	file, err := os.Create(filename)
+func NewChain(filename, receiver string) *BlockChain {
+	_, err := os.Create(filename)
 	if err != nil {
-		return err
+		return nil
 	}
-	file.Close()
+
 	db, err := sql.Open("sqlite3", filename)
 	if err != nil {
-		return err
+		return nil
 	}
-	defer db.Close()
+
 	_, err = db.Exec(CREATE_TABLE)
+	if err != nil {
+		return nil
+	}
+
 	chain := &BlockChain{
 		DB: db,
 	}
+
 	genesis := &Block{
 		CurrHash:  []byte(GENESIS_BLOCK),
 		Mapping:   make(map[string]uint64),
-		Miner:     reciver,
+		Miner:     receiver,
 		TimeStamp: time.Now().Format(time.RFC3339),
 	}
 	genesis.Mapping[STORAGE_CHAIN] = STORAGE_VALUE
-	genesis.Mapping[reciver] = GENESIS_REWARD
+	genesis.Mapping[receiver] = GENESIS_REWARD
 	chain.AddBlock(genesis)
-	return nil
+
+	return chain
 }
 
 func LoadChain(filename string) *BlockChain {
@@ -77,10 +84,12 @@ func LoadChain(filename string) *BlockChain {
 	if err != nil {
 		return nil
 	}
+
 	chain := BlockChain{
 		DB: db,
 	}
 	chain.index = chain.Size()
+
 	return &chain
 }
 
@@ -88,7 +97,11 @@ func (chain *BlockChain) LastHash() []byte {
 	var hash string
 	row := chain.DB.QueryRow("SELECT Hash FROM BlockChain ORDER BY Id DESC")
 	row.Scan(&hash)
-	return Base64Decode(hash)
+	bhash, err := Base64Decode(hash)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return bhash
 }
 
 func (chain *BlockChain) Balance(address string, size uint64) uint64 {
@@ -120,9 +133,17 @@ func (chain *BlockChain) Size() uint64 {
 	return index
 }
 
-func (chain *BlockChain) AddBlock(block *Block) {
-	chain.index += 1
-	chain.DB.Exec("INSERT INTO BlockChain (Hash, Block) VALUES ($1, $2)",
+func (chain *BlockChain) AddBlock(block *Block) error {
+	chain.index++
+	_, err := chain.DB.Exec("INSERT INTO BlockChain (Hash, Block) VALUES (?, ?)",
 		Base64Encode(block.CurrHash),
 		SerializeBlock(block))
+
+	return err
+}
+func (chain *BlockChain) HeadBlock() *Block {
+	var sblock string
+	row := chain.DB.QueryRow("SELECT Block FROM BlockChain ORDER BY Id DESC")
+	row.Scan(&sblock)
+	return DeserializeBlock(sblock)
 }

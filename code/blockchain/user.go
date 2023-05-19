@@ -3,13 +3,22 @@ package blockchain
 import "crypto/rsa"
 
 func NewUser() *User {
+	key, err := GeneratePrivate(KEY_SIZE)
+	if err == nil {
+		return &User{
+			PrivateKey: key,
+		}
+	}
 	return &User{
-		PrivateKey: GeneratePrivate(KEY_SIZE),
+		PrivateKey: key,
 	}
 }
 
 func LoadUser(purse string) *User {
-	priv := ParsePrivate(purse)
+	priv, err := ParsePrivate(purse)
+	if err != nil {
+		return nil
+	}
 	if priv == nil {
 		return nil
 	}
@@ -19,7 +28,11 @@ func LoadUser(purse string) *User {
 }
 
 func (user *User) Purse() string {
-	return StringPrivate(user.Private())
+	privkey, err := StringPrivate(user.Private())
+	if err != nil {
+		return ""
+	}
+	return privkey
 }
 
 func (user *User) Address() string {

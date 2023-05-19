@@ -27,7 +27,7 @@ type Transaction struct {
 	RandBytes []byte
 	PrevBlock []byte
 	Sender    string
-	Reciver   string
+	Receiver  string
 	Value     uint64
 	ToStorage uint64
 	CurrHash  []byte

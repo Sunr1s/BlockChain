@@ -10,190 +10,234 @@ import (
 
 	bc "github.com/Sunr1s/chain/blockchain"
 	nt "github.com/Sunr1s/chain/network"
+	"github.com/fatih/color"
+)
+
+const (
+	LoadAddressPrefix  = "-loadaddr:"
+	NewUserPrefix      = "-newuser:"
+	LoadUserPrefix     = "-loaduser:"
+	PanicMessagePrefix = "Initialization failed: "
+)
+
+var (
+	infog     = color.New(color.FgGreen).PrintlnFunc()
+	warng     = color.New(color.FgYellow).PrintlnFunc()
+	errColorg = color.New(color.FgRed).PrintlnFunc()
+	bcolorg   = color.New(color.BgCyan).PrintFunc()
 )
 
 func init() {
 	if len(os.Args) < 2 {
-		panic("fail 1")
+		panic(PanicMessagePrefix + "No arguments provided")
 	}
-	var (
-		addrStr     = ""
-		userNewStr  = ""
-		userLoadStr = ""
-	)
-	var (
-		addrExist     = false
-		userNewExist  = false
-		userLoadExist = false
-	)
-	for i := 1; i < len(os.Args); i++ {
-		arg := os.Args[i]
+
+	var addrStr, userNewStr, userLoadStr string
+
+	for _, arg := range os.Args[1:] {
 		switch {
-		case strings.HasPrefix(arg, "-loadaddr:"):
-			addrStr = strings.Replace(arg, "-loadaddr:", "", 1)
-			addrExist = true
-		case strings.HasPrefix(arg, "-newuser:"):
-			userNewStr = strings.Replace(arg, "-newuser:", "", 1)
-			userNewExist = true
-		case strings.HasPrefix(arg, "-loaduser:"):
-			userLoadStr = strings.Replace(arg, "-loaduser:", "", 1)
-			userLoadExist = true
+		case strings.HasPrefix(arg, LoadAddressPrefix):
+			addrStr = strings.TrimPrefix(arg, LoadAddressPrefix)
+		case strings.HasPrefix(arg, NewUserPrefix):
+			userNewStr = strings.TrimPrefix(arg, NewUserPrefix)
+			User = userNew(userNewStr)
+		case strings.HasPrefix(arg, LoadUserPrefix):
+			userLoadStr = strings.TrimPrefix(arg, LoadUserPrefix)
+			User = userLoad(userLoadStr)
 		}
 	}
-	if !(userNewExist || userLoadExist || !addrExist) {
-		panic("faild 333")
+
+	if addrStr == "" || User == nil {
+		panic(PanicMessagePrefix + "Invalid arguments")
 	}
+
 	err := json.Unmarshal([]byte(readFile(addrStr)), &Address)
 	if err != nil {
-		panic("failed 3")
+		panic(PanicMessagePrefix + "Address loading failed")
 	}
 	if len(Address) == 0 {
-		panic("failed 4")
+		panic(PanicMessagePrefix + "No addresses loaded")
 	}
-	if userNewExist {
-		User = userNew(userNewStr)
-	}
-	if userLoadExist {
-		User = userLoad(userLoadStr)
-	}
-	if User == nil {
-		panic("failed 5")
-	}
+}
+
+// ASCIILogo returns HAMAHA word in ASCII
+func ASCIILogo() string {
+	return `
+
+		██░ ██  ▄▄▄       ███▄ ▄███▓ ▄▄▄       ██░ ██  ▄▄▄
+		▓██░ ██▒▒████▄    ▓██▒▀█▀ ██▒▒████▄    ▓██░ ██▒▒████▄
+		▒██▀▀██░▒██  ▀█▄  ▓██    ▓██░▒██  ▀█▄  ▒██▀▀██░▒██  ▀█▄
+		░▓█ ░██ ░██▄▄▄▄██ ▒██    ▒██ ░██▄▄▄▄██ ░▓█ ░██ ░██▄▄▄▄██
+		░▓█▒░██▓ ▓█   ▓██▒▒██▒   ░██▒ ▓█   ▓██▒░▓█▒░██▓ ▓█   ▓██▒
+		▒ ░░▒░▒ ▒▒   ▓▒█░░ ▒░   ░  ░ ▒▒   ▓▒█░ ▒ ░░▒░▒ ▒▒   ▓▒█░
+		▒ ░▒░ ░  ▒   ▒▒ ░░  ░      ░  ▒   ▒▒ ░ ▒ ░▒░ ░  ▒   ▒▒ ░
+		░  ░░ ░  ░   ▒   ░      ░     ░   ▒    ░  ░░ ░  ░   ▒
+		░  ░  ░      ░  ░       ░         ░  ░ ░  ░  ░      ░  ░
+
+		git 		github.com/Sunr1s/BlockChain
+
+ `
 }
 
 func main() {
-	handleClient()
+	infog(ASCIILogo())
+	handleClientInput()
 }
 
-func handleClient() {
+func handleClientInput() {
+	makeTransaction([]string{"aaa", "3"})
+	makeTransaction([]string{"aaa", "3"})
 
-	var (
-		message string
-		splited []string
-	)
-	userBalance()
 	for {
-		message = inputString("> ")
-		splited = strings.Split(message, " ")
-		switch splited[0] {
+		message := inputString("> ")
+		splitted := strings.Split(message, " ")
+
+		switch splitted[0] {
 		case "/exit":
 			os.Exit(0)
 		case "/user":
-			if len(splited) < 2 {
-				fmt.Println("len(user) <2")
-				continue
-			}
-			switch splited[1] {
-			case "address":
-				userAddress()
-			case "purse":
-				userPurse()
-			case "balance":
-				userBalance()
-			}
+			handleUserCommand(splitted)
 		case "/chain":
-			if len(splited) < 2 {
-				fmt.Println("len(user) < 2")
-				continue
-			}
-			switch splited[1] {
-			case "print":
-				chainPrint()
-			case "tx":
-				chainTX(splited[1:])
-			case "balance":
-				chainBalance(splited[1:])
-			}
+			handleChainCommand(splitted)
 		default:
-			fmt.Println("undefined command\n")
+			errColorg("Undefined command")
 		}
 	}
 }
 
-func inputString(begin string) string {
-	fmt.Printf(begin)
+func inputString(prompt string) string {
+	fmt.Print(prompt)
 	msg, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-	return strings.Replace(msg, "\n", "", 1)
+	return strings.TrimSpace(msg)
 }
 
-func userAddress() {
-	fmt.Println("Address:", User.Address(), "\n")
+// Command handlers
+func handleUserCommand(args []string) {
+	if len(args) < 2 {
+		errColorg("Invalid command: user command expected")
+		return
+	}
+
+	switch args[1] {
+	case "address":
+		printUserAddress()
+	case "purse":
+		printUserPurse()
+	case "balance":
+		printUserBalance()
+	default:
+		errColorg("Invalid command: unknown user command")
+	}
 }
 
-func userPurse() {
-	fmt.Println("Purse:", User.Purse(), "\n")
+func handleChainCommand(args []string) {
+	if len(args) < 2 {
+		errColorg("Invalid command: chain command expected")
+		return
+	}
+
+	switch args[1] {
+	case "print":
+		printChain()
+	case "tx":
+		makeTransaction(args[2:])
+	case "balance":
+		printChainBalance(args[2:])
+	default:
+		errColorg("Invalid command: unknown chain command")
+	}
 }
 
-func userBalance() {
+// User command functions
+func printUserAddress() {
+	infog(fmt.Sprintf("Address: %s", User.Address()))
+}
+
+func printUserPurse() {
+	infog(fmt.Sprintf("Purse: %s", User.Purse()))
+}
+
+func printUserBalance() {
 	printBalance(User.Address())
 }
 
-func chainPrint() {
+// Chain command functions
+func printChain() {
 	for i := 0; ; i++ {
-		res := nt.Send(Address[0], &nt.Package{
+		response := nt.Send(Address[0], &nt.Package{
 			Option: GET_BLOCK,
 			Data:   fmt.Sprintf("%d", i),
 		})
-		if res == nil || res.Data == "" {
+		if response == nil || response.Data == "" {
 			break
 		}
-		fmt.Printf("[%d] => %s\n", i+1, res.Data)
+		fmt.Printf("[%d] => %s\n", i+1, response.Data)
 	}
 	fmt.Println()
 }
 
-func chainTX(splited []string) {
-	if len(splited) != 3 {
-		fmt.Println("failed: len(splited) != 3\n")
+func makeTransaction(args []string) {
+	if len(args) != 2 {
+		errColorg("Invalid transaction: receiver and amount expected")
 		return
 	}
-	num, err := strconv.Atoi(splited[2])
+
+	receiver := args[0]
+	amount, err := strconv.Atoi(args[1])
 	if err != nil {
-		fmt.Println("failed: strconv.Atoi(num)\n")
+		errColorg("Invalid transaction: invalid amount")
 		return
 	}
+
 	for _, addr := range Address {
-		res := nt.Send(addr, &nt.Package{
+		response := nt.Send(addr, &nt.Package{
 			Option: GET_LHASH,
 		})
-		if res == nil {
+		if response == nil {
 			continue
 		}
-		tx := bc.NewTransaction(User, bc.Base64Decode(res.Data), splited[1], uint64(num))
-		res = nt.Send(addr, &nt.Package{
+
+		lastHash, _ := bc.Base64Decode(response.Data)
+		tx, _ := bc.NewTransaction(User, lastHash, receiver, uint64(amount))
+
+		serializedTx, _ := bc.SerializeTx(tx)
+		response = nt.Send(addr, &nt.Package{
 			Option: ADD_TRNSX,
-			Data:   bc.SerializeTx(tx),
+			Data:   serializedTx,
 		})
-		if res == nil {
+
+		if response == nil {
 			continue
 		}
-		if res.Data == "ok" {
-			fmt.Printf("ok: (%s)\n", addr)
+
+		if response.Data == "ok" {
+			infog(fmt.Sprintf("Transaction successful: %s", addr))
 		} else {
-			fmt.Printf("fail: (%s) (%s)\n", addr, strings.Split(res.Data, "="))
+			errColorg(fmt.Sprintf("Transaction failed: %s %s", addr, strings.Split(response.Data, "=")))
 		}
 	}
 	fmt.Println()
 }
 
-func chainBalance(splited []string) {
-	if len(splited) != 2 {
-		fmt.Println("len(splited) != 2\n")
+func printChainBalance(args []string) {
+	if len(args) != 1 {
+		errColorg("Invalid command: user address expected")
 		return
 	}
-	printBalance(splited[1])
+
+	printBalance(args[0])
 }
 
-func printBalance(useraddr string) {
+func printBalance(userAddr string) {
 	for _, addr := range Address {
-		res := nt.Send(addr, &nt.Package{
+		response := nt.Send(addr, &nt.Package{
 			Option: GET_BLNCE,
-			Data:   useraddr,
+			Data:   userAddr,
 		})
-		if res == nil {
+		if response == nil {
 			continue
 		}
-		fmt.Printf("Balance (%s): %s coins\n", addr, res.Data)
+		infog(fmt.Sprintf("Balance (%s): %s coins", addr, response.Data))
 	}
 	fmt.Println()
 }

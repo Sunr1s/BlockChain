@@ -5,11 +5,17 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"sort"
 	"time"
+
+	nt "github.com/Sunr1s/chain/network"
 )
 
+const timeThreshold = 1 * time.Second // duration to wait for
+
+// Function to create a new block
 func NewBlock(miner string, prevHash []byte) *Block {
 	return &Block{
 		Difficulty: DIFFICULTY,
@@ -19,22 +25,21 @@ func NewBlock(miner string, prevHash []byte) *Block {
 	}
 }
 
+// Function to add transaction to the block
 func (block *Block) AddTransaction(chain *BlockChain, tx *Transaction) error {
 	if tx == nil {
-		return errors.New("tx is null")
+		return errors.New("transaction is null")
 	}
 	if tx.Value == 0 {
-		return errors.New("tx value = 0")
+		return errors.New("transaction value is zero")
 	}
 	if tx.Sender != STORAGE_CHAIN && len(block.Transactions) == TXS_LIMIT {
-		return errors.New("len tx = limit")
+		return errors.New("transaction limit reached")
 	}
-	if tx.Sender != STORAGE_CHAIN && tx.Value > START_PRECENT && tx.ToStorage != STORAGE_REWRD {
-		return errors.New("storage reward pass")
+	if tx.Sender != STORAGE_CHAIN && tx.Value > START_PERCENT && tx.ToStorage != STORAGE_REWARD {
+		return errors.New("storage reward exceeded")
 	}
-	if !bytes.Equal(tx.PrevBlock, chain.LastHash()) {
-		return errors.New("prev block in tx != last hash in chain")
-	}
+
 	var balanceInChain uint64
 	balanceInTX := tx.Value + tx.ToStorage
 	if value, ok := block.Mapping[tx.Sender]; ok {
@@ -45,22 +50,23 @@ func (block *Block) AddTransaction(chain *BlockChain, tx *Transaction) error {
 	if balanceInTX > balanceInChain {
 		return errors.New("insufficient funds")
 	}
+
 	block.Mapping[tx.Sender] = balanceInChain - balanceInTX
-	block.addBalance(chain, tx.Reciver, tx.Value)
-	block.addBalance(chain, STORAGE_CHAIN, tx.ToStorage)
+	block.IncrementBalance(chain, tx.Receiver, tx.Value)
+	block.IncrementBalance(chain, STORAGE_CHAIN, tx.ToStorage)
 	block.Transactions = append(block.Transactions, *tx)
 	return nil
 }
 
 func (block *Block) Accept(chain *BlockChain, user *User) error {
-	if !block.transactionsIsValid(chain, chain.Size()) {
+	if !block.AreTransactionsValid(chain, chain.Size()) {
 		return errors.New("transaction is not valid")
 	}
 	block.AddTransaction(chain, &Transaction{
 		RandBytes: GenerateRandomBytes(RAND_BYTES),
 		Sender:    STORAGE_CHAIN,
-		Reciver:   user.Address(),
-		Value:     STORAGE_REWRD,
+		Receiver:  user.Address(),
+		Value:     STORAGE_REWARD,
 	})
 	block.TimeStamp = time.Now().Format(time.RFC3339)
 	block.CurrHash = block.hash()
@@ -70,85 +76,64 @@ func (block *Block) Accept(chain *BlockChain, user *User) error {
 	return nil
 }
 
-func (block *Block) Mining(ch chan bool) error {
-	block.Nonce, DIFFICULTY = block.proof(ch)
-	block.Difficulty = DIFFICULTY
-	return nil
-}
+// AreTransactionsValid checks if all transactions in the block are valid.
+func (block *Block) AreTransactionsValid(chain *BlockChain, size uint64) bool {
+	numTxs := len(block.Transactions)
+	storageTransactionExists := false
 
-func (block *Block) transactionsIsValid(chain *BlockChain, size uint64) bool {
-	lentxs := len(block.Transactions)
-	plusStorage := 0
-	for i := 0; i < lentxs; i++ {
-		if block.Transactions[i].Sender == STORAGE_CHAIN {
-			plusStorage = 1
+	for _, tx := range block.Transactions {
+		if tx.Sender == STORAGE_CHAIN {
+			storageTransactionExists = true
 			break
 		}
 	}
-	if lentxs == 0 || lentxs > TXS_LIMIT+plusStorage {
+
+	if numTxs == 0 || numTxs > TXS_LIMIT+btoi(storageTransactionExists) {
 		return false
 	}
-	for i := 0; i < lentxs-1; i++ {
-		for j := i + 1; j < lentxs; j++ {
-			if bytes.Equal(block.Transactions[i].RandBytes, block.Transactions[j].RandBytes) {
-				return false
-			}
-			if block.Transactions[i].Sender == STORAGE_CHAIN &&
-				block.Transactions[j].Sender == STORAGE_CHAIN {
+
+	for i := 0; i < numTxs-1; i++ {
+		for j := i + 1; j < numTxs; j++ {
+			if bytes.Equal(block.Transactions[i].RandBytes, block.Transactions[j].RandBytes) ||
+				(block.Transactions[i].Sender == STORAGE_CHAIN && block.Transactions[j].Sender == STORAGE_CHAIN) {
 				return false
 			}
 		}
 	}
-	for i := 0; i < lentxs; i++ {
-		tx := block.Transactions[i]
-		if tx.Sender == STORAGE_CHAIN {
-			if tx.Reciver != block.Miner || tx.Value != STORAGE_REWRD {
-				return false
-			}
-		} else {
-			if !tx.hashIsValid() {
-				return false
-			}
-			if !tx.signIsValid() {
-				return false
-			}
-		}
-		if !block.balanceIsValid(chain, tx.Sender, size) {
-			return false
-		}
-		if !block.balanceIsValid(chain, tx.Reciver, size) {
+
+	for _, tx := range block.Transactions {
+		if !tx.IsValid() || !block.IsBalanceValid(chain, tx.Sender, size) || !block.IsBalanceValid(chain, tx.Receiver, size) {
 			return false
 		}
 	}
+
 	return true
 }
 
+// CalculateHash computes the block's hash based on its contents.
 func (block *Block) hash() []byte {
 	var tempHash []byte
+
 	for _, tx := range block.Transactions {
 		tempHash = HashSum(bytes.Join(
-			[][]byte{
-				tempHash,
-				tx.CurrHash,
-			},
+			[][]byte{tempHash, tx.CurrHash},
 			[]byte{},
 		))
 	}
-	var list []string
+
+	hashes := make([]string, 0, len(block.Mapping))
 	for hash := range block.Mapping {
-		list = append(list, hash)
+		hashes = append(hashes, hash)
 	}
-	sort.Strings(list)
-	for _, hash := range list {
+	sort.Strings(hashes)
+
+	for _, hash := range hashes {
 		tempHash = HashSum(bytes.Join(
-			[][]byte{
-				tempHash,
-				[]byte(hash),
-				ToBytes(block.Mapping[hash]),
-			},
+			[][]byte{tempHash, []byte(hash), ToBytes(block.Mapping[hash])},
 			[]byte{},
 		))
 	}
+
 	return HashSum(bytes.Join(
 		[][]byte{
 			tempHash,
@@ -161,103 +146,155 @@ func (block *Block) hash() []byte {
 	))
 }
 
+// SignBlock signs the block with the given private key.
 func (block *Block) sign(priv *rsa.PrivateKey) []byte {
-	return Sign(priv, block.CurrHash)
-}
-
-func (block *Block) proof(ch chan bool) (uint64, uint8) {
-	nonce, hashTime := ProofOfWork(block.CurrHash, block.Difficulty, ch)
-	// DIFFICULTY = uint8(float64(block.Difficulty) / (hashTime / 3))
-	hashTime++
-	// fmt.Println("slozhnost ", block.Difficulty)
-	// fmt.Println("Now ", DIFFICULTY)
-	return nonce, DIFFICULTY
-}
-
-func (block *Block) addBalance(chain *BlockChain, reciver string, value uint64) {
-	var balanceInChain uint64
-	if v, ok := block.Mapping[reciver]; ok {
-		balanceInChain = v
-	} else {
-		balanceInChain = chain.Balance(reciver, chain.Size())
+	signature, err := Sign(priv, block.CurrHash)
+	if err != nil {
+		return nil
 	}
-	block.Mapping[reciver] = balanceInChain + value
+	return signature
 }
 
-func (block *Block) IsValid(chain *BlockChain, size uint64) bool {
-	switch {
-	case block == nil:
-		return false
-	case block.Difficulty != DIFFICULTY:
-		return false
-	case !block.hashIsValid(chain, chain.Size()):
-		return false
-	case !block.signIsValid():
-		return false
-	case !block.proofIsValid():
-		return false
-	case !block.mappingIsValid():
-		return false
-	case !block.timeIsValid(chain, chain.Size()):
-		return false
-	case !block.transactionsIsValid(chain, chain.Size()):
+// Helper function to convert bool to int
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// StartMining starts the mining process on a block, using a hybrid PoET/PoW model.
+// It sends a wake-up message to all other nodes and decides whether PoW is needed.
+func (block *Block) StartMining(chain *BlockChain, stopChan, sleepModeChan chan bool, addresses []string) error {
+	// Start PoET process and assign resulting nonce to block
+	err, nonce := block.PoET(stopChan, sleepModeChan)
+	if err != nil {
+		return fmt.Errorf("error running PoET: %w", err)
+	}
+	block.Nonce = nonce
+
+	// Wake up other nodes and decide whether PoW is needed
+	isMiningNeeded := nt.SendWakeUpMsgToAll(addresses)
+
+	if isMiningNeeded {
+		// Start PoW process
+		nonce, _ := ProofOfWork(block.CurrHash, block.Difficulty, stopChan)
+		if err != nil {
+			return fmt.Errorf("error running PoW: %w", err)
+		}
+		block.Nonce = nonce
+	}
+
+	return nil
+}
+
+func (block *Block) Mining(chain *BlockChain, ch chan bool, Addresses []string, sleepMode chan bool) error {
+	return block.StartMining(chain, ch, sleepMode, Addresses)
+}
+
+// GetBlockFromChain fetches a specific block from the blockchain based on the given index.
+func GetBlockFromChain(chain *BlockChain, index int) (string, error) {
+	var block string
+	err := chain.DB.QueryRow("SELECT Block FROM BlockChain WHERE Id=$1", index+1).Scan(&block)
+	if err != nil {
+		return "", fmt.Errorf("error fetching block: %w", err)
+	}
+	return block, nil
+}
+
+// IncrementBalance increments the balance of the specified receiver by the given value.
+func (block *Block) IncrementBalance(chain *BlockChain, receiver string, value uint64) {
+	var balanceInChain uint64
+	if currentBalance, exists := block.Mapping[receiver]; exists {
+		balanceInChain = currentBalance
+	} else {
+		balanceInChain = chain.Balance(receiver, chain.Size())
+	}
+	block.Mapping[receiver] = balanceInChain + value
+}
+
+// IsBlockValid checks whether the block is valid according to the blockchain.
+func (block *Block) IsBlockValid(chain *BlockChain, size uint64) bool {
+	if block == nil ||
+		block.Difficulty != DIFFICULTY ||
+		!block.IsHashValid(chain, chain.Size()) ||
+		!block.IsSignatureValid() ||
+		!block.IsProofValid() ||
+		!block.IsMappingValid() ||
+		!block.IsTimeValid(chain, chain.Size()) ||
+		!block.AreTransactionsValid(chain, chain.Size()) {
 		return false
 	}
 	return true
 }
 
-func (block *Block) hashIsValid(chain *BlockChain, index uint64) bool {
-	if !bytes.Equal(block.hash(), block.CurrHash) {
+// IsHashValid validates the hash of the block.
+func (block *Block) IsHashValid(chain *BlockChain, index uint64) bool {
+	calculatedHash := block.hash()
+
+	if !bytes.Equal(calculatedHash, block.CurrHash) {
+		fmt.Printf("Hash mismatch. Calculated: %x, Current: %x\n", calculatedHash, block.CurrHash)
 		return false
 	}
+
 	var id uint64
-	row := chain.DB.QueryRow("SELECT Id FROM BlockChain WHERE Hash=$1", Base64Encode(block.PrevHash))
-	row.Scan(&id)
-	return id == index
-}
-
-func (block *Block) signIsValid() bool {
-	return Verify(ParsePublic(block.Miner), block.CurrHash, block.Signature) == nil
-}
-
-func (block *Block) proofIsValid() bool {
-	intHash := big.NewInt(1)
-	Target := big.NewInt(1)
-	hash := HashSum(bytes.Join(
-		[][]byte{
-			block.CurrHash,
-			ToBytes(block.Nonce),
-		},
-		[]byte{},
-	))
-	intHash.SetBytes(hash)
-	Target.Lsh(Target, 256-uint(block.Difficulty))
-	if intHash.Cmp(Target) == -1 {
-		return true
+	err := chain.DB.QueryRow("SELECT Id FROM BlockChain WHERE Hash=$1", Base64Encode(block.PrevHash)).Scan(&id)
+	if err != nil {
+		fmt.Printf("Error fetching Id from database: %v\n", err)
+		return false
 	}
-	return false
+
+	if id != index {
+		fmt.Printf("Block index mismatch. Expected: %d, Got: %d\n", index, id)
+		return false
+	}
+
+	return true
 }
 
-func (block *Block) mappingIsValid() bool {
-	for addr := range block.Mapping {
-		if addr == STORAGE_CHAIN {
+// IsSignatureValid validates the block's signature.
+func (block *Block) IsSignatureValid() bool {
+	pubKey, err := ParsePublic(block.Miner)
+	if err != nil {
+		return false
+	}
+	return Verify(pubKey, block.CurrHash, block.Signature) == nil
+}
+
+// IsProofValid validates the proof of the block.
+func (block *Block) IsProofValid() bool {
+	intHash := big.NewInt(1)
+	target := big.NewInt(1)
+	hash := HashSum(bytes.Join([][]byte{block.CurrHash, ToBytes(block.Nonce)}, []byte{}))
+
+	intHash.SetBytes(hash)
+	target.Lsh(target, 256-uint(block.Difficulty))
+
+	return intHash.Cmp(target) == -1
+}
+
+// IsMappingValid validates the block's address mapping.
+func (block *Block) IsMappingValid() bool {
+	for address := range block.Mapping {
+		if address == STORAGE_CHAIN {
 			continue
 		}
-		flag := false
+		addressExists := false
 		for _, tx := range block.Transactions {
-			if tx.Sender == addr || tx.Reciver == addr {
-				flag = true
+			if tx.Sender == address || tx.Receiver == address {
+				addressExists = true
 				break
 			}
 		}
-		if !flag {
+		if !addressExists {
 			return false
 		}
 	}
 	return true
 }
 
-func (block *Block) timeIsValid(chain *BlockChain, indedx uint64) bool {
+// IsTimeValid validates the block's timestamp.
+func (block *Block) IsTimeValid(chain *BlockChain, index uint64) bool {
 	btime, err := time.Parse(time.RFC3339, block.TimeStamp)
 	if err != nil {
 		return false
@@ -282,30 +319,29 @@ func (block *Block) timeIsValid(chain *BlockChain, indedx uint64) bool {
 	return diff > 0
 }
 
-func (block *Block) balanceIsValid(chain *BlockChain, address string, size uint64) bool {
-	if _, ok := block.Mapping[address]; !ok {
+// IsBalanceValid validates the balance of the block.
+func (block *Block) IsBalanceValid(chain *BlockChain, address string, size uint64) bool {
+	balance, exists := block.Mapping[address]
+	if !exists {
 		return false
 	}
-	lentxs := len(block.Transactions)
+
 	balanceInChain := chain.Balance(address, size)
-	balanceSubBlock := uint64(0)
-	balanceAddBlock := uint64(0)
-	for j := 0; j < lentxs; j++ {
-		tx := block.Transactions[j]
+	var balanceAddBlock, balanceSubBlock uint64
+
+	for _, tx := range block.Transactions {
 		if tx.Sender == address {
 			balanceSubBlock += tx.Value + tx.ToStorage
 		}
-		if tx.Reciver == address {
+		if tx.Receiver == address {
 			balanceAddBlock += tx.Value
 		}
 		if STORAGE_CHAIN == address {
 			balanceAddBlock += tx.ToStorage
 		}
 	}
-	if (balanceInChain + balanceAddBlock - balanceSubBlock) != block.Mapping[address] {
-		return false
-	}
-	return true
+
+	return (balanceInChain + balanceAddBlock - balanceSubBlock) == balance
 }
 
 func DeserializeBlock(data string) *Block {

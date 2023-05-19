@@ -10,106 +10,58 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"math"
-	"math/big"
-	mrand "math/rand"
-	"time"
 )
-
-func ProofOfWork(blockHash []byte, difficulty uint8, ch chan bool) (uint64, float64) {
-	var (
-		Target  = big.NewInt(1)
-		intHash = big.NewInt(1)
-		nonce   = uint64(mrand.Intn(math.MaxUint32))
-		hash    []byte
-		count   float64
-	)
-	Target.Lsh(Target, 256-uint(difficulty))
-	start := time.Now()
-	for nonce < math.MaxUint64 {
-		count++
-		select {
-		case <-ch:
-			if DEBUG {
-				fmt.Println()
-				fmt.Printf("time: %v: hash: %v\n", time.Since(start).Seconds(), count)
-			}
-			return nonce, time.Since(start).Seconds()
-		default:
-			hash = HashSum(bytes.Join(
-				[][]byte{
-					blockHash,
-					ToBytes(nonce),
-				},
-				[]byte{},
-			))
-			if DEBUG {
-				fmt.Printf("\rMining: %s", Base64Encode(hash))
-			}
-			intHash.SetBytes(hash)
-			if intHash.Cmp(Target) == -1 {
-				if DEBUG {
-					fmt.Println()
-				}
-				fmt.Printf("%v: %v\n", time.Since(start).Seconds(), count)
-				return nonce, time.Since(start).Seconds()
-			}
-			nonce++
-		}
-	}
-	return nonce, time.Since(start).Seconds()
-}
 
 func Verify(pub *rsa.PublicKey, data, sign []byte) error {
 	return rsa.VerifyPSS(pub, crypto.SHA256, data, sign, nil)
 }
 
-func ParsePublic(pubData string) *rsa.PublicKey {
-	pub, err := x509.ParsePKCS1PublicKey([]byte(Base64Decode(pubData)))
-	if err != nil {
-		return nil
+func ParsePublic(pubData string) (*rsa.PublicKey, error) {
+	decodedData, decodeErr := Base64Decode(pubData)
+	if decodeErr != nil {
+		return nil, fmt.Errorf("unable to base64 decode public key: %w", decodeErr)
 	}
-	return pub
+	pub, parseErr := x509.ParsePKCS1PublicKey(decodedData)
+	if parseErr != nil {
+		return nil, fmt.Errorf("unable to parse public key: %w", parseErr)
+	}
+	return pub, nil
 }
 
-func ParsePrivate(privData string) *rsa.PrivateKey {
-	priv, err := x509.ParsePKCS1PrivateKey(Base64Decode(privData))
-	if err != nil {
-		return nil
+func ParsePrivate(privData string) (*rsa.PrivateKey, error) {
+	decodedData, decodeErr := Base64Decode(privData)
+	if decodeErr != nil {
+		return nil, fmt.Errorf("unable to base64 decode private key: %w", decodeErr)
 	}
-	return priv
+	priv, parseErr := x509.ParsePKCS1PrivateKey(decodedData)
+	if parseErr != nil {
+		return nil, fmt.Errorf("unable to parse private key: %w", parseErr)
+	}
+	return priv, nil
 }
 
-func Base64Decode(data string) []byte {
+func Base64Decode(data string) ([]byte, error) {
 	result, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("unable to base64 decode: %w", err)
 	}
-	return result
+	return result, nil
 }
 
-func Base64Encode(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
-}
-
-func GeneratePrivate(bits uint) *rsa.PrivateKey {
+func GeneratePrivate(bits uint) (*rsa.PrivateKey, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, int(bits))
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("unable to generate private key: %w", err)
 	}
-	return priv
+	return priv, nil
 }
 
-func StringPrivate(priv *rsa.PrivateKey) string {
-	return Base64Encode(x509.MarshalPKCS1PrivateKey(priv))
-}
-
-func Sign(priv *rsa.PrivateKey, data []byte) []byte {
+func Sign(priv *rsa.PrivateKey, data []byte) ([]byte, error) {
 	signdata, err := rsa.SignPSS(rand.Reader, priv, crypto.SHA256, data, nil)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("unable to sign data: %w", err)
 	}
-	return signdata
+	return signdata, nil
 }
 
 func GenerateRandomBytes(max uint) []byte {
@@ -119,11 +71,6 @@ func GenerateRandomBytes(max uint) []byte {
 		return nil
 	}
 	return slice
-}
-
-func HashSum(data []byte) []byte {
-	hash := sha256.Sum256(data)
-	return hash[:]
 }
 
 func ToBytes(num uint64) []byte {
@@ -137,4 +84,18 @@ func ToBytes(num uint64) []byte {
 
 func StringPublic(pub *rsa.PublicKey) string {
 	return Base64Encode(x509.MarshalPKCS1PublicKey(pub))
+}
+
+func StringPrivate(priv *rsa.PrivateKey) (string, error) {
+	privBytes := x509.MarshalPKCS1PrivateKey(priv)
+	return Base64Encode(privBytes), nil
+}
+
+func Base64Encode(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+func HashSum(data []byte) []byte {
+	hash := sha256.Sum256(data)
+	return hash[:]
 }

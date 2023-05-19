@@ -1,10 +1,21 @@
 $ ./node -serve::8080 -newuser:node1.key -newchain:chain1.db -loadaddr:addr.json
-$ ./node -serve::9090 -newuser:node2.key -newchain:chain2.db -loadaddr:addr.json
+$ ./node -serve::9099 -newuser:node2.key -newchain:chain2.db -loadaddr:addr.json
 $ ./client -loaduser:node1.key -loadaddr:addr.json
-
+            "args": [
+                "-serve::8088",
+                "-newuser:node1.key",
+                "-newchain:chain1.db",
+                "-loadaddr:addr.json"
+            ]
             "args": [
                 "-serve::9090",
                 "-newuser:node2.key",
                 "-newchain:chain2.db",
                 "-loadaddr:addr.json"
             ]
+        "args": [
+                "-loaduser:node1.key",
+                "-loadaddr:addr.json",
+            ]
+$ ./node -serve::8088 -loaduser:node1.key -loadchain:chain1.db -loadaddr:addr.json
+$ ./node -serve::9099 -loaduser:node2.key -loadchain:chain2.db -loadaddr:addr.json

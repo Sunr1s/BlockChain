@@ -77,3 +77,12 @@ func (m *MemPool) DeleteByID(txHexID string) {
 func (m *MemPool) Size() int {
 	return len(m.pool)
 }
+
+func (m *MemPool) UpdateMempoolTransactions(newPrevBlock []byte) {
+
+	txs := m.Read(m.Size())
+	for _, tx := range txs {
+		tx.PrevBlock = newPrevBlock
+		tx.CurrHash = tx.Hash() // Recalculate the hash with the updated PrevBlock.
+	}
+}

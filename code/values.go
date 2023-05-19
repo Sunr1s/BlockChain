@@ -31,6 +31,7 @@ const (
 	GET_BLOCK
 	GET_LHASH
 	GET_BLNCE
+	WAKEUP_MSG
 )
 
 func encode(privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey) (string, string) {
@@ -69,7 +70,10 @@ func userNew(filename string) *bc.User {
 }
 
 func userLoad(filename string) *bc.User {
-	priv := readKeys(filename, true)
+	priv, err := readKeys(filename, true)
+	if err != nil {
+		return nil
+	}
 	if priv == "" {
 		return nil
 	}
@@ -104,25 +108,34 @@ func readFile(filename string) string {
 	return string(data)
 }
 
-func readKeys(filename string, key bool) string {
+func readKeys(filename string, key bool) (string, error) {
 	data, err := os.ReadFile(filename + "/wallet.dat")
-
 	if err != nil {
-		return ""
+		return "", err
 	}
+
 	var keys Wallet
 	err = json.Unmarshal(data, &keys)
-	priv, pub := decode(string(keys.Private), string(keys.Public))
 	if err != nil {
-		return ""
-	}
-	if err != nil {
-		return ""
-	}
-	if key {
-		return bc.StringPrivate(priv)
-	} else {
-		return bc.StringPublic(pub)
+		return "", err
 	}
 
+	priv, pub := decode(string(keys.Private), string(keys.Public))
+	if err != nil {
+		return "", err
+	}
+
+	if key {
+		privkey, err := bc.StringPrivate(priv)
+		if err != nil {
+			return "", err
+		}
+		return privkey, nil
+	} else {
+		pubkey := bc.StringPublic(pub)
+		if err != nil {
+			return "", err
+		}
+		return pubkey, nil
+	}
 }
