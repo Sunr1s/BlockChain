@@ -90,7 +90,7 @@ func init() {
 		os.Exit(1)
 	}
 	Serve = serveStr
-
+	addrStr = "addr.json"
 	err := json.Unmarshal([]byte(readFile(addrStr)), &Addresses)
 	if err != nil {
 		errColor("Failed to read addresses:", err)
