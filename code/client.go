@@ -85,8 +85,8 @@ func main() {
 }
 
 func handleClientInput() {
-	makeTransaction([]string{"aaa", "3"})
-	makeTransaction([]string{"aaa", "3"})
+	makeTransaction([]string{"nXPFoF7IZh5acnHf4FhiI4qMJ42V45eNr09QmtwInFI=", "3"})
+	makeTransaction([]string{"VUHACVzBBh/dmDOtsn3PPxfO6HBIHl590ppyWTIjiqA=", "3"})
 
 	for {
 		message := inputString("> ")
@@ -198,7 +198,8 @@ func makeTransaction(args []string) {
 		}
 
 		lastHash, _ := bc.Base64Decode(response.Data)
-		tx, _ := bc.NewTransaction(User, lastHash, receiver, uint64(amount))
+		chain := bc.LoadChain("chain1.db")
+		tx, _ := bc.NewTransaction(User, lastHash, receiver, uint64(amount), chain)
 
 		serializedTx, _ := bc.SerializeTx(tx)
 		response = nt.Send(addr, &nt.Package{

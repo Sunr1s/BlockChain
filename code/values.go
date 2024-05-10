@@ -1,10 +1,11 @@
 package main
 
 import (
-	"crypto/rsa"
+	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -34,27 +35,38 @@ const (
 	WAKEUP_MSG
 )
 
-func encode(privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey) (string, string) {
-	x509Encoded := x509.MarshalPKCS1PrivateKey(privateKey)
+func encode(privateKey ed25519.PrivateKey, publicKey ed25519.PublicKey) (string, string) {
+	x509Encoded, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		panic(err)
+	}
 	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
 
-	x509EncodedPub := x509.MarshalPKCS1PublicKey(publicKey)
+	x509EncodedPub, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		panic(err)
+	}
 	pemEncodedPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: x509EncodedPub})
 
 	return string(pemEncoded), string(pemEncodedPub)
 }
 
-func decode(pemEncoded string, pemEncodedPub string) (*rsa.PrivateKey, *rsa.PublicKey) {
+func decode(pemEncoded string, pemEncodedPub string) (ed25519.PrivateKey, ed25519.PublicKey) {
 	block, _ := pem.Decode([]byte(pemEncoded))
 	x509Encoded := block.Bytes
-	privateKey, _ := x509.ParsePKCS1PrivateKey(x509Encoded)
+	privateKey, err := x509.ParsePKCS8PrivateKey(x509Encoded)
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	blockPub, _ := pem.Decode([]byte(pemEncodedPub))
 	x509EncodedPub := blockPub.Bytes
-	genericPublicKey, _ := x509.ParsePKCS1PublicKey(x509EncodedPub)
-	publicKey := genericPublicKey
+	genericPublicKey, err := x509.ParsePKIXPublicKey(x509EncodedPub)
+	if err != nil {
+		fmt.Println(err)
+	}
 
-	return privateKey, publicKey
+	return privateKey.(ed25519.PrivateKey), genericPublicKey.(ed25519.PublicKey)
 }
 
 func userNew(filename string) *bc.User {
@@ -84,9 +96,9 @@ func userLoad(filename string) *bc.User {
 	return user
 }
 
-func writeFile(foldername string, priv *rsa.PrivateKey, pub *rsa.PublicKey) error {
-
+func writeFile(foldername string, priv ed25519.PrivateKey, pub ed25519.PublicKey) error {
 	encPriv, encPub := encode(priv, pub)
+
 	kdata := Wallet{
 		Public:  encPub,
 		Private: encPriv,
@@ -126,10 +138,8 @@ func readKeys(filename string, key bool) (string, error) {
 	}
 
 	if key {
-		privkey, err := bc.StringPrivate(priv)
-		if err != nil {
-			return "", err
-		}
+		privkey, _ := bc.StringPrivate(priv)
+
 		return privkey, nil
 	} else {
 		pubkey := bc.StringPublic(pub)

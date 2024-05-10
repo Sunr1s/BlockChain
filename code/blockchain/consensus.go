@@ -33,7 +33,7 @@ func generatePoetWaitTime() time.Duration {
 
 // Poet implements Proof of Elapsed Time (PoET) by waiting for a random amount of time.
 func (block *Block) PoET(stopChan chan bool, sleepMode chan bool) (error, uint64) {
-	waitTime := generatePoetWaitTime() //
+	waitTime := generatePoetWaitTime()
 	fmt.Println("PoET waiting time: ", waitTime)
 
 	// Check the sleep mode status and adjust accordingly.

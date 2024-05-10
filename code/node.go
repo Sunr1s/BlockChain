@@ -226,6 +226,7 @@ func wakeUpHandler(pack *nt.Package) string {
 }
 func handleTransaction(pack *nt.Package) string {
 	tx, err := bc.DeserializeTx(pack.Data)
+	fmt.Println(tx)
 	if err != nil || tx == nil {
 		return "failed to deserialize transaction"
 	}

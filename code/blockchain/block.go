@@ -2,7 +2,7 @@ package blockchain
 
 import (
 	"bytes"
-	"crypto/rsa"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -70,7 +70,7 @@ func (block *Block) Accept(chain *BlockChain, user *User) error {
 	})
 	block.TimeStamp = time.Now().Format(time.RFC3339)
 	block.CurrHash = block.hash()
-	block.Signature = block.sign(user.PrivateKey)
+	block.Signature = block.sign(&user.PrivateKey)
 	// block.Nonce, DIFFICULTY = block.proof(ch)
 	// block.Difficulty = DIFFICULTY
 	return nil
@@ -102,7 +102,7 @@ func (block *Block) AreTransactionsValid(chain *BlockChain, size uint64) bool {
 	}
 
 	for _, tx := range block.Transactions {
-		if !tx.IsValid() || !block.IsBalanceValid(chain, tx.Sender, size) || !block.IsBalanceValid(chain, tx.Receiver, size) {
+		if !tx.IsValid(*chain) || !block.IsBalanceValid(chain, tx.Sender, size) || !block.IsBalanceValid(chain, tx.Receiver, size) {
 			return false
 		}
 	}
@@ -147,8 +147,8 @@ func (block *Block) hash() []byte {
 }
 
 // SignBlock signs the block with the given private key.
-func (block *Block) sign(priv *rsa.PrivateKey) []byte {
-	signature, err := Sign(priv, block.CurrHash)
+func (block *Block) sign(priv *ed25519.PrivateKey) []byte {
+	signature, err := Sign(*priv, block.CurrHash)
 	if err != nil {
 		return nil
 	}
@@ -258,7 +258,7 @@ func (block *Block) IsSignatureValid() bool {
 	if err != nil {
 		return false
 	}
-	return Verify(pubKey, block.CurrHash, block.Signature) == nil
+	return Verify(pubKey, block.CurrHash, block.Signature)
 }
 
 // IsProofValid validates the proof of the block.
@@ -299,7 +299,7 @@ func (block *Block) IsTimeValid(chain *BlockChain, index uint64) bool {
 	if err != nil {
 		return false
 	}
-	diff := time.Now().Sub(btime)
+	diff := time.Since(btime)
 	if diff < 0 {
 		return false
 	}

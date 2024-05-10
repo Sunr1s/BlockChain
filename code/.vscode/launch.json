@@ -12,9 +12,7 @@
             "mode": "auto",
             "program": "${fileDirname}",
             "args": [
-                "-serve::9099",
-                "-newuser:node2.key",
-                "-newchain:chain2.db",
+                "-loaduser:node1.key",
                 "-loadaddr:addr.json"
             ]
         }

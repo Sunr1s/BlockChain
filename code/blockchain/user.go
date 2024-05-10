@@ -1,25 +1,25 @@
 package blockchain
 
-import "crypto/rsa"
+import (
+	"crypto/ed25519"
+	"crypto/rand"
+)
 
+// NewUser создаёт нового пользователя с парой ключей ed25519.
 func NewUser() *User {
-	key, err := GeneratePrivate(KEY_SIZE)
-	if err == nil {
-		return &User{
-			PrivateKey: key,
-		}
-	}
-	return &User{
-		PrivateKey: key,
-	}
-}
-
-func LoadUser(purse string) *User {
-	priv, err := ParsePrivate(purse)
+	_, privKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil
 	}
-	if priv == nil {
+	return &User{
+		PrivateKey: privKey,
+	}
+}
+
+// LoadUser загружает пользователя из сериализованного приватного ключа.
+func LoadUser(purse string) *User {
+	priv, err := ParsePrivate(purse)
+	if err != nil {
 		return nil
 	}
 	return &User{
@@ -27,22 +27,35 @@ func LoadUser(purse string) *User {
 	}
 }
 
+// Purse возвращает приватный ключ пользователя в сериализованной форме.
 func (user *User) Purse() string {
-	privkey, err := StringPrivate(user.Private())
+	privkey, err := StringPrivate(user.PrivateKey)
 	if err != nil {
 		return ""
 	}
 	return privkey
 }
 
+// Address возвращает публичный ключ пользователя в сериализованной форме.
 func (user *User) Address() string {
-	return StringPublic(user.Public())
+	pub := user.Public()
+
+	return StringPublic(pub)
 }
 
-func (user *User) Private() *rsa.PrivateKey {
+// Address возвращает публичный ключ пользователя в сериализованной форме.
+func (user *User) ViewAddress() string {
+	// Генерируем адрес на основе публичного ключа пользователя
+	address := PublicKeyToAddress(user.Public())
+	return address
+}
+
+// Private возвращает приватный ключ пользователя.
+func (user *User) Private() ed25519.PrivateKey {
 	return user.PrivateKey
 }
 
-func (user *User) Public() *rsa.PublicKey {
-	return &(user.PrivateKey).PublicKey
+// Public возвращает публичный ключ пользователя.
+func (user *User) Public() ed25519.PublicKey {
+	return user.PrivateKey.Public().(ed25519.PublicKey)
 }

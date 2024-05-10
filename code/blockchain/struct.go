@@ -1,9 +1,11 @@
 package blockchain
 
 import (
-	"crypto/rsa"
+	"crypto/ed25519"
 	"database/sql"
 	"sync"
+
+	"github.com/noot/ring-go"
 )
 
 type BlockChain struct {
@@ -24,18 +26,19 @@ type Block struct {
 }
 
 type Transaction struct {
-	RandBytes []byte
-	PrevBlock []byte
-	Sender    string
-	Receiver  string
-	Value     uint64
-	ToStorage uint64
-	CurrHash  []byte
-	Signature []byte
+	RandBytes     []byte
+	PrevBlock     []byte
+	Sender        string
+	Receiver      string
+	Value         uint64
+	ToStorage     uint64
+	CurrHash      []byte
+	Signature     []byte
+	RingSignature *ring.RingSig
 }
 
 type User struct {
-	PrivateKey *rsa.PrivateKey
+	PrivateKey ed25519.PrivateKey
 }
 
 type MemPool struct {

@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"crypto/ed25519"
 	"database/sql"
 	"fmt"
 	"os"
@@ -146,4 +147,38 @@ func (chain *BlockChain) HeadBlock() *Block {
 	row := chain.DB.QueryRow("SELECT Block FROM BlockChain ORDER BY Id DESC")
 	row.Scan(&sblock)
 	return DeserializeBlock(sblock)
+}
+
+func (chain *BlockChain) GetLatestPublicKeys(limit int) ([]ed25519.PublicKey, error) {
+	var publicKeys []ed25519.PublicKey
+	uniqueKeys := make(map[string]bool)
+
+	size := chain.Size()
+	for i := size; i > 0 && len(publicKeys) < limit; i-- {
+		blockJSON, err := GetBlockFromChain(chain, int(i-1))
+		if err != nil {
+			return nil, fmt.Errorf("error retrieving block: %w", err)
+		}
+
+		block := DeserializeBlock(blockJSON)
+		if block == nil {
+			continue
+		}
+
+		for _, tx := range block.Transactions {
+			if _, exists := uniqueKeys[tx.Sender]; !exists && len(publicKeys) < limit && tx.Sender != "STORAGE-CHAIN" {
+				pubKeyBytes, err := Base64Decode(tx.Sender)
+				if err != nil {
+					fmt.Println("Ошибка при разборе публичного ключа:", err)
+					continue
+				}
+
+				pubKey := ed25519.PublicKey(pubKeyBytes)
+				uniqueKeys[tx.Sender] = true
+				publicKeys = append(publicKeys, pubKey)
+			}
+		}
+	}
+
+	return publicKeys, nil
 }
