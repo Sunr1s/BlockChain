@@ -3,11 +3,13 @@ package blockchain
 import (
 	"bytes"
 	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
-	"github.com/athanorlabs/go-dleq/types"
 	"github.com/noot/ring-go"
+	"golang.org/x/crypto/sha3"
 )
 
 func HashToBytes(data []byte) [32]byte {
@@ -52,55 +54,51 @@ func NewTransaction(user *User, lastHash []byte, to string, value uint64, chain 
 		}
 	}
 
-	secretIndex := 0 // Индекс секретного ключа пользователя
-
 	// Создание кольцевой подписи
-	ringSignature, err := tx.SignTransaction(tx.CurrHash, user.Private(), publicKeys, secretIndex)
-	if err != nil {
-		return nil, err
-	}
-	tx.RingSignature = ringSignature
+  // ringSignature, err := tx.SignTransaction(ring.Ed25519(), publicKeys)
+	// if err != nil {
+	//	return nil, err
+	// }
+	//tx.RingSignature = &ringSignature
 
 	return tx, nil
 }
 
-func (tx *Transaction) SignTransaction(message []byte, secretKey ed25519.PrivateKey, publicKeys []ed25519.PublicKey, secretIndex int) (*ring.RingSig, error) {
-	curve := ring.Ed25519()
+func ConvertPublicKeysToString(keys []ed25519.PublicKey) string {
+	var sb strings.Builder
 
-	// Преобразование publicKeys в []types.Point
-	pubKeys := make([]types.Point, len(publicKeys))
-	for i, pubKey := range publicKeys {
-		point, err := curve.DecodeToPoint(pubKey)
-		if err != nil {
-			return nil, err
+	for _, key := range keys {
+		// Конвертируем каждый ключ в hex-строку
+		encodedKey := hex.EncodeToString(key)
+		// Добавляем ключ в строковый буфер, разделяя ключи пробелом для удобства
+		if sb.Len() > 0 {
+			sb.WriteString(" ")
 		}
-		pubKeys[i] = point
+		sb.WriteString(encodedKey)
 	}
 
-	fmt.Println([32]byte(secretKey.Seed()))
-	privkey := curve.NewRandomScalar()
-	fmt.Println(privkey)
-	// Преобразование secretKey в types.Scalar
-	privKey := curve.ScalarFromBytes([32]byte(secretKey.Seed()))
-
-	// Создание кольца из публичных ключей
-	r, err := ring.NewKeyRingFromPublicKeys(curve, pubKeys, privKey, secretIndex)
-	if err != nil {
-		return nil, err
-	}
-
-	// Создание кольцевой подписи
-	signature, err := r.Sign(HashToBytes(message), privKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return signature, nil
+	return sb.String()
 }
 
-func (tx *Transaction) VerifyTransaction(message []byte, ringSignature *ring.RingSig) bool {
-	// Проверка подписи
-	return ringSignature.Verify(HashToBytes(message))
+func (tx *Transaction) SignTransaction(curve ring.Curve, msg []ed25519.PublicKey) (ring.RingSig, error) {
+
+	privkey := curve.NewRandomScalar()
+	msgHash := sha3.Sum256([]byte(ConvertPublicKeysToString(msg)))
+
+	// size of the public key ring (anonymity set)
+	const size = 2
+	const idx = 0
+
+	keyring, err := ring.NewKeyRing(curve, size, privkey, idx)
+	if err != nil {
+		panic(err)
+	}
+
+	sig, err := keyring.Sign(msgHash, privkey)
+	if err != nil {
+		panic(err)
+	}
+	return *sig, nil
 }
 
 func (tx *Transaction) Hash() []byte {
@@ -139,10 +137,6 @@ func (tx *Transaction) IsValid(chain BlockChain) bool {
 	}
 
 	if Verify(pubkey, tx.CurrHash, tx.Signature); err != nil {
-		return false
-	}
-	// Проверка кольцевой подписи
-	if !tx.VerifyTransaction(tx.CurrHash, tx.RingSignature) {
 		return false
 	}
 
